@@ -14,28 +14,39 @@ pipeline {
             }
         }
         stage("build jar") {
+            when {
+                expression { env.BRANCH_NAME == 'main' || env.BRANCH_NAME == 'master' }
+            }
             steps {
                 script {
+                    echo "Current branch: ${env.BRANCH_NAME}"
                     gv.buildJar()
-
                 }
             }
         }
 
         stage("build image") {
+            when {
+                expression { env.BRANCH_NAME == 'main' || env.BRANCH_NAME == 'master' }
+            }
             steps {
                 script {
+                    echo "Current branch: ${env.BRANCH_NAME}"
                     gv.buildImage()
                 }
             }
         }
 
         stage("deploy") {
+            when {
+                expression { env.BRANCH_NAME == 'main' || env.BRANCH_NAME == 'master' }
+            }
             steps {
                 script {
+                    echo "Current branch: ${env.BRANCH_NAME}"
                     gv.deployApp()
                 }
             }
         }               
     }
-} 
+}
