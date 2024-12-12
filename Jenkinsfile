@@ -49,4 +49,16 @@ pipeline {
             }
         }               
     }
+    post {
+        always {
+            echo "Pipeline finished. Cleaning up workspace."
+            cleanWs()
+        }
+        success {
+            echo "Pipeline completed successfully on branch: ${env.BRANCH_NAME}"
+        }
+        failure {
+            echo "Pipeline failed on branch: ${env.BRANCH_NAME}"
+        }
+    }
 }
