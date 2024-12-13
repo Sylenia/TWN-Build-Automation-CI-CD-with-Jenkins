@@ -26,7 +26,7 @@ pipeline {
             }
         }
 
-        stage("build image") {
+        stage("build and push image") {
             when {
                 expression { env.BRANCH_NAME == 'main' || env.BRANCH_NAME == 'jenkins-shared-lib' }
             }
@@ -34,6 +34,8 @@ pipeline {
                 script {
                     echo "Current branch: ${env.BRANCH_NAME}"
                     buildImage 'syleniainc/demo-app:2.0'
+                    dockerLogin()
+                    dockerPush 'syleniainc/demo-app:2.0'
                 }
             }
         }
