@@ -16,7 +16,7 @@ pipeline {
         }
         stage("build jar") {
             when {
-                expression { env.BRANCH_NAME == 'main' || env.BRANCH_NAME == 'master' }
+                expression { env.BRANCH_NAME == 'main' || env.BRANCH_NAME == 'jenkins-shared-lib' }
             }
             steps {
                 script {
@@ -28,7 +28,7 @@ pipeline {
 
         stage("build image") {
             when {
-                expression { env.BRANCH_NAME == 'main' || env.BRANCH_NAME == 'master' }
+                expression { env.BRANCH_NAME == 'main' || env.BRANCH_NAME == 'jenkins-shared-lib' }
             }
             steps {
                 script {
@@ -40,7 +40,7 @@ pipeline {
 
         stage("deploy") {
             when {
-                expression { env.BRANCH_NAME == 'main' || env.BRANCH_NAME == 'master' }
+                expression { env.BRANCH_NAME == 'main' || env.BRANCH_NAME == 'jenkins-shared-lib' }
             }
             steps {
                 script {
