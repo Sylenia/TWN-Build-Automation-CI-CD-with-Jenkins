@@ -1,3 +1,4 @@
+@Library('jenkins-shared-library')
 def gv
 
 pipeline {   
@@ -20,7 +21,7 @@ pipeline {
             steps {
                 script {
                     echo "Current branch: ${env.BRANCH_NAME}"
-                    gv.buildJar()
+                    buildJar()
                 }
             }
         }
@@ -32,7 +33,7 @@ pipeline {
             steps {
                 script {
                     echo "Current branch: ${env.BRANCH_NAME}"
-                    gv.buildImage()
+                    buildImage()
                 }
             }
         }
