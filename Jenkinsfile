@@ -33,7 +33,7 @@ pipeline {
             steps {
                 script {
                     echo "Current branch: ${env.BRANCH_NAME}"
-                    buildImage()
+                    buildImage 'syleniainc/demo-app:2.0'
                 }
             }
         }
