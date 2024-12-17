@@ -13,6 +13,7 @@ This project demonstrates how to automate the deployment of a Dockerized Java ap
 - **Git**: For version control.
 - **Java & Maven**: To build the application.
 - **Docker Hub**: To store and retrieve the Docker images.
+- **Docker Compose**: For multi-container orchestration.
 
 ---
 
@@ -24,6 +25,7 @@ Ensure you have the following ready:
 - An AWS account with permissions to create and manage EC2 instances.
 - SSH key pair configured for Jenkins to access the EC2 instance.
 - A private or public Docker Hub repository for storing the application image.
+- A web application already containerized.
 
 ---
 
@@ -185,6 +187,225 @@ You should see your application running.
 
 ---
 
+### **8. Install Docker Compose on EC2**
+SSH into your EC2 instance and run the following commands to install Docker and Docker Compose:
+
+```bash
+# Install Docker Compose
+sudo curl -L https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m) -o /usr/local/bin/docker-compose
+sudo chmod +x /usr/local/bin/docker-compose
+
+# Verify installations
+docker --version
+docker-compose --version
+```
+
+---
+
+### **9. Create the `docker-compose.yml` File**
+Create a `docker-compose.yml` file in your project repository to define your web application deployment:
+
+```yaml
+version: '3.8'
+services:
+    java-maven-app:
+      image: ${IMAGE}
+      ports:
+        - 8080:8080
+    postgres:
+      image: postgres:15
+      ports:
+       - 5432:5432
+      environment: 
+       - POSTGRES_PASSWORD=my-password
+```
+- Adjust the ports as necessary.
+
+Commit the file to your project repository.
+
+---
+
+### **10. Create a Shell Script for Deployment**
+Create a shell script file named `example.sh` in your project repository to automate Docker Compose execution:
+
+```bash
+#!/bin/bash
+
+# Stop and remove existing containers
+docker-compose down
+
+# Pull the latest image from Docker Hub
+docker-compose pull
+
+# Start the application using Docker Compose
+docker-compose up -d
+
+# Clean up unused images
+docker image prune -f
+```
+
+Make the script executable:
+```bash
+chmod +x example.sh
+```
+
+Commit this file to your project repository.
+
+---
+
+### **11. Configure Jenkins Pipeline**
+Update your `Jenkinsfile` to include the `docker-compose.yml` and execute the `deploy.sh` script on the remote EC2 instance.
+
+```groovy
+def gv
+
+pipeline {
+    agent any
+    tools {
+        maven 'maven-3.9'
+    }
+    stages {
+        stage("init") {
+            steps {
+                script {
+                    gv = load "script.groovy"
+                }
+            }
+        }
+
+        stage("build jar") {
+            when {
+                expression { env.BRANCH_NAME == 'main' || env.BRANCH_NAME == 'master' }
+            }
+            steps {
+                script {
+                    echo "Current branch: ${env.BRANCH_NAME}"
+                    gv.buildJar()
+                }
+            }
+        }
+
+        stage("build image") {
+            when {
+                expression { env.BRANCH_NAME == 'main' || env.BRANCH_NAME == 'master' }
+            }
+            steps {
+                script {
+                    echo "Current branch: ${env.BRANCH_NAME}"
+                    gv.buildImage()
+                }
+            }
+        }
+
+        stage("deploy") {
+            when {
+                expression { env.BRANCH_NAME == 'main' || env.BRANCH_NAME == 'master' }
+            }
+            steps {
+                script {
+                    echo "Current branch: ${env.BRANCH_NAME}"
+                    def shellCmd = "bash ./server-cmds.sh ${IMAGE_NAME}"
+                    // SSH to Amazon Server Instance using sshagent
+                    sshagent(['ec2-server-key']) {
+                        sh "scp server-cmds.sh ec2-user@<amazon-server-ip>:/home/ec2-user"
+                        sh "scp docker-compose.yaml ec2-user@<amazon-server-ip>:/home/ec2-user"
+                        sh '''
+                            ssh -o StrictHostKeyChecking=no ec2-user@<amazon-server-ip> ${shellCmd} \
+                            "docker pull <your-dockerhub-username>/<your-repo-name>:latest && \
+                            docker stop demo-app || true && \
+                            docker rm demo-app || true && \
+                            docker run -d -p 3080:3080 --name demo-app <your-dockerhub-username>/<your-repo-name>:latest"
+                        '''
+                    }
+                    gv.deployApp()
+                }
+            }
+        }
+    }
+    post {
+        always {
+            echo "Pipeline finished. Cleaning up workspace."
+            cleanWs()
+        }
+        success {
+            echo "Pipeline completed successfully on branch: ${env.BRANCH_NAME}"
+        }
+        failure {
+            echo "Pipeline failed on branch: ${env.BRANCH_NAME}"
+        }
+    }
+}
+```
+
+Replace placeholders:
+- `<EC2-Public-IP>`: Public IP of your EC2 instance.
+- `<dockerhub-username>/<repo-name>`: Docker Hub image repository.
+
+### **12. Run the Jenkins Pipeline**
+1. Commit and push the `docker-compose.yml`, `deploy.sh`, and updated `Jenkinsfile` to your Git repository.
+2. Trigger the Jenkins pipeline.
+3. Monitor the pipeline stages:
+   - Build the Maven project.
+   - Build and push the Docker image.
+   - SSH into the EC2 instance and execute `deploy.sh` using Docker Compose.
+
+---
+
+### **13. Verify the Deployment**
+1. SSH into your EC2 instance:
+   ```bash
+   ssh -i "<aws-key.pem>" ec2-user@<EC2-Public-IP>
+   ```
+2. Verify the running containers:
+   ```bash
+   docker-compose ps
+   ```
+3. Access the web application in your browser:
+   ```
+   http://<EC2-Public-IP>
+   ```
+
+---
+
+## **14. Dynamic Versioning and Commit Version Update**
+To incorporate version control and dynamic versioning in the pipeline:
+
+1. **Increment the Application Version**
+   Use environment variables to increment the version dynamically:
+   ```groovy
+   def APP_VERSION = sh(script: 'date +%Y%m%d%H%M%S', returnStdout: true).trim()
+   ```
+
+2. **Tag Docker Images with the Version**
+   Update the `DOCKER_IMAGE` variable:
+   ```groovy
+   environment {
+       DOCKER_IMAGE = "<dockerhub-username>/<repo-name>:${APP_VERSION}"
+   }
+   ```
+
+3. **Commit the Version Update**
+   Add a step to commit and push the updated version to the Git repository:
+   ```groovy
+   stage("Commit Version") {
+       steps {
+           sh '''
+               git config user.name "jenkins"
+               git config user.email "jenkins@ci-cd.com"
+               git commit -am "Version updated to ${APP_VERSION}"
+               git push origin main
+           '''
+       }
+   }
+   ```
+
+This ensures:
+- Dynamic version tags for Docker images.
+- The updated version is committed back to the repository.
+
+---
+
+
 ## **Conclusion**
 This project automates the deployment process from Jenkins to AWS EC2 using Docker and SSH. By following these steps, you have achieved a fully automated CI/CD pipeline with Jenkins, Docker, and AWS.
 
@@ -202,4 +423,4 @@ This project automates the deployment process from Jenkins to AWS EC2 using Dock
 
 ---
 
-Happy Deploying! 🚀
+Happy Deploying and  Automating! 🚀
